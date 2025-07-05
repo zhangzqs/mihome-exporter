@@ -19,4 +19,4 @@ ADD . /app
 WORKDIR /app
 RUN uv sync --locked
 
-CMD ["uv", "run", "src/main.py"]
+CMD ["uv", "run", "src/main.py", "--config", "config.yaml"]
