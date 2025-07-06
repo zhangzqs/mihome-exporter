@@ -114,25 +114,25 @@ def collect_qweather(location_cfg: LocationConfig):
     obs_time_deplay_seconds.labels(location=location_cfg.name).set(
         value=(now_time - obs_time).total_seconds(),
     )
-    temperature.labels(location=location_cfg.name).set(
+    temperature_celsius.labels(location=location_cfg.name).set(
         value=float(now_weather['temp']),
     )
-    humidity.labels(location=location_cfg.name).set(
+    humidity_percent.labels(location=location_cfg.name).set(
         value=float(now_weather['humidity']),
     )
-    feels_like.labels(location=location_cfg.name).set(
+    feels_like_celsius.labels(location=location_cfg.name).set(
         value=float(now_weather['feelsLike']),
     )
-    wind_360.labels(location=location_cfg.name).set(
+    wind_360_degrees.labels(location=location_cfg.name).set(
         value=float(now_weather['wind360']),
     )
-    wind_scale.labels(location=location_cfg.name).set(
+    wind_scale_level.labels(location=location_cfg.name).set(
         value=float(now_weather['windScale']),
     )
-    wind_speed.labels(location=location_cfg.name).set(
+    wind_speed_meters_per_second.labels(location=location_cfg.name).set(
         value=float(now_weather['windSpeed']),
     )
-    pressure.labels(location=location_cfg.name).set(
+    pressure_hpa.labels(location=location_cfg.name).set(
         value=float(now_weather['pressure']),
     )
 
