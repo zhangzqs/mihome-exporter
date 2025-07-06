@@ -18,7 +18,7 @@ class MiHomeConfig(BaseModel):
     auth_file: str = 'auth.json'
     devices_file: str = 'devices.json'
     devices: list[DeviceConfig] = []
-    interval_seconds: float = 5.0
+    interval_seconds: float = 10.0
 
 
 cfg: Optional[MiHomeConfig] = None

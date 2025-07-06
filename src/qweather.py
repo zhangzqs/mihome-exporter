@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Any, Optional
+from cachetools import TTLCache
 import httpx
 from pydantic import BaseModel
 import time
 from threading import Thread
 from prometheus_client import Gauge
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 
 
@@ -17,7 +18,7 @@ class LocationConfig(BaseModel):
 class QWeatherConfig(BaseModel):
     api_key: str
     api_host: str
-    interval_seconds: int = 1200
+    interval_seconds: int = 10
     locations: list[LocationConfig] = []
 
 
@@ -91,12 +92,25 @@ def init(_cfg: QWeatherConfig):
     print('QWeather 配置初始化完成')
 
 
-def collect_qweather(location_cfg: LocationConfig):
+weather_cache = TTLCache(
+    maxsize=100,
+    ttl=timedelta(minutes=10).total_seconds(),
+)
+
+
+def get_weather(lon: float, lat: float) -> Any:
+    """
+    10分钟缓存一次
+    """
+    location = f"{format(lon, '.2f')},{format(lat, '.2f')}"
+    if location in weather_cache:
+        return weather_cache[location]
+    logging.info(f'缓存过期，获取 {location} 的天气数据')
     url = httpx.URL(f'{cfg.api_host}/v7/grid-weather/now')
     resp = httpx.get(
         url=url,
         params={
-            "location": f"{format(location_cfg.lon, '.2f')},{format(location_cfg.lat, '.2f')}",
+            "location": location,
         },
         headers={
             'X-QW-Api-Key': cfg.api_key,
@@ -104,7 +118,11 @@ def collect_qweather(location_cfg: LocationConfig):
     if resp.status_code != 200:
         raise httpx.HTTPStatusError(
             f'请求失败: {resp.status_code} - {resp.text}', request=resp.request, response=resp)
-    resp_body = resp.json()
+    return resp.json()
+
+
+def collect_qweather(location_cfg: LocationConfig):
+    resp_body = get_weather(location_cfg.lon, location_cfg.lat)
     logging.info(f'获取 {location_cfg.name} 的天气数据: {resp_body}')
     now_weather = resp_body['now']
     obs_time = datetime.fromisoformat(
