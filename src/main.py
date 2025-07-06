@@ -298,6 +298,31 @@ def collect_router_metrics(device_name: str):
     )
 
 
+cooker_status = pc.Gauge(
+    namespace=NAMESPACE,
+    name='cooker_status',
+    documentation='电饭煲烹饪状态',
+    labelnames=['device_name'],
+)
+
+
+@register_collector(model='chunmi.cooker.normal2')
+def collect_cooker_metrics(device_name: str):
+    props = get_device_props(
+        name=device_name,
+        assert_model=collect_cooker_metrics.model,
+        sp_id_pairs={
+            'cooker_status': (2, 1),  # 烹饪状态
+        }
+    )
+    logging.info(f'采集 {device_name} 的数据: {props}')
+    cooker_status.labels(
+        device_name=device_name,
+    ).set(
+        value=props['cooker_status']['value'],
+    )
+
+
 def collector_by_name(device_name: str):
     device = get_device_by_name(device_name)
     matcherd_collector: Optional[Callable[[str], None]] = None
