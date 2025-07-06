@@ -1,23 +1,12 @@
-from typing import Type, TypeVar
+from typing import Optional, Type, TypeVar
 import yaml
 from pydantic import BaseModel
 import argparse
 
+from logger import LoggerConfig
+
 # 定义一个泛型类型 T，限制为 BaseModel 或其子类
 T = TypeVar("T", bound=BaseModel)
-
-
-def load_config(config_file: str, model: Type[T]) -> T:
-    """
-    从 YAML 文件加载配置并解析为指定的 Pydantic 模型。
-
-    :param config_file: YAML 配置文件路径
-    :param model: Pydantic 模型类
-    :return: 解析后的 Pydantic 模型实例
-    """
-    with open(config_file, "r", encoding="utf-8") as f:
-        config_data = yaml.safe_load(f)
-    return model(**config_data)
 
 
 def load_config_from_args(model: Type[T]) -> T:
@@ -29,5 +18,6 @@ def load_config_from_args(model: Type[T]) -> T:
     args = parser.parse_args()
 
     # 加载配置文件
-    cfg = load_config(args.config, model)
-    return cfg
+    with open(args.config, "r", encoding="utf-8") as f:
+        config_data = yaml.safe_load(f)
+    return model(**config_data)
