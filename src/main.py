@@ -1,3 +1,4 @@
+from threading import Thread
 from typing import Optional
 import prometheus_client as pc
 from config import load_config_from_args
@@ -21,7 +22,7 @@ def main():
     pc.start_http_server(port=cfg.port)
     logging.info(f"Starting MiHome Exporter on port {cfg.port}")
 
-    threads = []
+    threads: list[Thread] = []
     if cfg.mihome_config:
         mihome.init(cfg.mihome_config)
         threads.append(mihome.start_collect())
@@ -34,12 +35,18 @@ def main():
     else:
         logging.warning(
             "QWeather configuration is not provided, skipping QWeather collector initialization.")
-    if threads:
-        for t in threads:
-            t.join()
-    else:
+    if not threads:
         logging.warning(
             "No collectors initialized, exiting. Please provide valid configurations.")
+        return
+    while True:
+        for thread in threads:
+            if not thread.is_alive():
+                logging.error(
+                    f"Thread {thread.name} has stopped unexpectedly. Exiting.")
+                return
+        for thread in threads:
+            thread.join(timeout=1)
 
 
 if __name__ == '__main__':

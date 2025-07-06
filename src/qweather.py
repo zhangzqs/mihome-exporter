@@ -3,7 +3,7 @@ import httpx
 from pydantic import BaseModel
 import time
 from threading import Thread
-import prometheus_client as pc
+from prometheus_client import Gauge
 from datetime import datetime, timezone
 import logging
 
@@ -25,56 +25,56 @@ cfg: Optional[QWeatherConfig] = None
 
 NAMESPACE = 'qweather'
 
-obs_time_deplay_seconds = pc.Gauge(
+obs_time_deplay_seconds = Gauge(
     namespace=NAMESPACE,
     name='obs_time_deplay_seconds',
     documentation='观测延时',
     labelnames=['location'],
 )
 
-temperature_celsius = pc.Gauge(
+temperature_celsius = Gauge(
     namespace=NAMESPACE,
     name='temperature_celsius',
     documentation='当前温度',
     labelnames=['location'],
 )
 
-humidity_percent = pc.Gauge(
+humidity_percent = Gauge(
     namespace=NAMESPACE,
     name='humidity_percent',
     documentation='当前湿度',
     labelnames=['location'],
 )
 
-feels_like_celsius = pc.Gauge(
+feels_like_celsius = Gauge(
     namespace=NAMESPACE,
     name='feels_like_celsius',
     documentation='体感温度',
     labelnames=['location'],
 )
 
-wind_360_degrees = pc.Gauge(
+wind_360_degrees = Gauge(
     namespace=NAMESPACE,
     name='wind_360_degrees',
     documentation='风向（360度）',
     labelnames=['location'],
 )
 
-wind_scale_level = pc.Gauge(
+wind_scale_level = Gauge(
     namespace=NAMESPACE,
     name='wind_scale_level',
     documentation='风力等级',
     labelnames=['location'],
 )
 
-wind_speed_meters_per_second = pc.Gauge(
+wind_speed_meters_per_second = Gauge(
     namespace=NAMESPACE,
     name='wind_speed_meters_per_second',
     documentation='风速',
     labelnames=['location'],
 )
 
-pressure_hpa = pc.Gauge(
+pressure_hpa = Gauge(
     namespace=NAMESPACE,
     name='pressure_hpa',
     documentation='气压',
@@ -137,14 +137,22 @@ def collect_qweather(location_cfg: LocationConfig):
     )
 
 
+def collect_once():
+    try:
+        for location in cfg.locations:
+            collect_qweather(location)
+    except Exception as e:
+        logging.error(f'采集 QWeather 数据时发生错误: {e}')
+        logging.exception(e)
+
+
 def start_collect():
     if cfg is None:
         raise ValueError('请先调用 init() 初始化配置')
 
     def run():
         while True:
-            for location in cfg.locations:
-                collect_qweather(location)
+            collect_once()
             time.sleep(cfg.interval_seconds)
 
     t = Thread(target=run, name='QWeatherCollectorThread', daemon=True)

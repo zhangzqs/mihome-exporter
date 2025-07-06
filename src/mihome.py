@@ -1,12 +1,13 @@
 import logging
 import os
 from typing import Callable, Optional, Any
-import prometheus_client as pc
 from mijiaAPI import mijiaAPI, mijiaLogin
 import json
 from pydantic import BaseModel
 from threading import Thread
 import time
+from datetime import datetime
+from prometheus_client import Gauge
 
 
 class DeviceConfig(BaseModel):
@@ -96,16 +97,23 @@ def get_device_props(
             'siid': siid,
             'piid': piid,
         })
+    logging.info(f'查询设备 {device["name"]} 的属性: {query_list}')
     props = api.get_devices_prop(query_list)
+    logging.info(f'获取到设备 {device["name"]} 的属性: {props}')
     result = {}
     for prop in props:
         siid = prop['siid']
         piid = prop['piid']
         value = prop['value']
+        update_time = datetime.fromtimestamp(float(prop['updateTime']))
         # 寻找sp_id_pairs中对应的键
         for key, (expected_siid, expected_piid) in sp_id_pairs.items():
             if siid == expected_siid and piid == expected_piid:
-                result[key] = {'value': value}
+                now_time = datetime.now()
+                result[key] = {
+                    'value': value,
+                    'delay_seconds': (now_time - update_time).total_seconds(),
+                }
                 break
     if 'localip' in device:
         result['device_ip'] = device['localip']
@@ -129,21 +137,28 @@ def register_collector(**metadata):
 
 
 NAMESPACE = 'mihome_exporter'
-plug_power_on_status = pc.Gauge(
+prop_delay_seconds = Gauge(
+    namespace=NAMESPACE,
+    name='prop_delay_seconds',
+    documentation='属性更新延时',
+    labelnames=['device_name', 'property_name'],
+)
+
+plug_power_on_status = Gauge(
     namespace=NAMESPACE,
     name='plug_power_on_status',
     documentation='插座电源状态',
     labelnames=['device_ip', 'device_name'],
 )
 
-plug_temperature = pc.Gauge(
+plug_temperature = Gauge(
     namespace=NAMESPACE,
     name='plug_temperature',
     documentation='设备温度',
     labelnames=['device_ip', 'device_name'],
 )
 
-plug_electric_power = pc.Gauge(
+plug_electric_power = Gauge(
     namespace=NAMESPACE,
     name='plug_electric_power',
     documentation='功率',
@@ -182,6 +197,10 @@ def collect_cuco_plug_v3_metrics(device_name: str):
     ).set(
         value=props['temperature']['value'],
     )
+    for property_name in ['power_on_status', 'electric_power', 'temperature']:
+        prop_delay_seconds.labels(device_name, property_name).set(
+            value=props[property_name]['delay_seconds'],
+        )
 
 
 @register_collector(model='chuangmi.plug.m3')
@@ -208,23 +227,30 @@ def collect_chuangmi_plug_m3_metrics(device_name: str):
     ).set(
         value=props['temperature']['value'],
     )
+    for property_name in ['power_on_status', 'temperature']:
+        prop_delay_seconds.labels(
+            device_name=device_name,
+            property_name=property_name,
+        ).set(
+            value=props[property_name]['delay_seconds'],
+        )
 
 
-sensor_ht_temperature = pc.Gauge(
+sensor_ht_temperature = Gauge(
     namespace=NAMESPACE,
     name='sensor_ht_temperature',
     documentation='温度',
     labelnames=['device_name'],
 )
 
-sensor_ht_relative_humidity = pc.Gauge(
+sensor_ht_relative_humidity = Gauge(
     namespace=NAMESPACE,
     name='sensor_ht_relative_humidity',
     documentation='相对湿度',
     labelnames=['device_name'],
 )
 
-sensor_ht_battery_level = pc.Gauge(
+sensor_ht_battery_level = Gauge(
     namespace=NAMESPACE,
     name='sensor_ht_battery_level',
     documentation='电池电量',
@@ -259,16 +285,23 @@ def collect_miaomiaoce_sensor_ht_t2(device_name: str):
     ).set(
         value=props['battery_level']['value'],
     )
+    for property_name in ['temperature', 'relative_humidity', 'battery_level']:
+        prop_delay_seconds.labels(
+            device_name=device_name,
+            property_name=property_name,
+        ).set(
+            value=props[property_name]['delay_seconds'],
+        )
 
 
-router_download_speed = pc.Gauge(
+router_download_speed = Gauge(
     namespace=NAMESPACE,
     name='router_download_speed',
     documentation='路由器下载速度',
     labelnames=['device_name'],
 )
 
-router_connected_device_number = pc.Gauge(
+router_connected_device_number = Gauge(
     namespace=NAMESPACE,
     name='router_connected_device_number',
     documentation='路由器连接的设备数量',
@@ -297,9 +330,16 @@ def collect_router_metrics(device_name: str):
     ).set(
         value=props['connected_device_number']['value'],
     )
+    for property_name in ['download_speed', 'connected_device_number']:
+        prop_delay_seconds.labels(
+            device_name=device_name,
+            property_name=property_name,
+        ).set(
+            value=props[property_name]['delay_seconds'],
+        )
 
 
-cooker_status = pc.Gauge(
+cooker_status = Gauge(
     namespace=NAMESPACE,
     name='cooker_status',
     documentation='电饭煲烹饪状态',
@@ -322,6 +362,13 @@ def collect_cooker_metrics(device_name: str):
     ).set(
         value=props['cooker_status']['value'],
     )
+    for property_name in ['cooker_status']:
+        prop_delay_seconds.labels(
+            device_name=device_name,
+            property_name=property_name,
+        ).set(
+            value=props[property_name]['delay_seconds'],
+        )
 
 
 def collector_by_name(device_name: str):
@@ -347,14 +394,22 @@ def collector_by_name(device_name: str):
     matcherd_collector(device_name)
 
 
+def collect_once():
+    try:
+        for device in cfg.devices:
+            collector_by_name(device.name)
+    except Exception as e:
+        logging.error(f'采集数据时发生错误: {e}')
+        logging.exception(e)
+
+
 def start_collect() -> Thread:
     if cfg is None:
         raise ValueError('请先调用 init() 初始化配置')
 
     def run():
         while True:
-            for device in cfg.devices:
-                collector_by_name(device.name)
+            collect_once()
             time.sleep(cfg.interval_seconds)
 
     t = Thread(target=run, name='MiHomeCollectorThread', daemon=True)
