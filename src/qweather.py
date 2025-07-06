@@ -32,51 +32,51 @@ obs_time_deplay_seconds = pc.Gauge(
     labelnames=['location'],
 )
 
-temperature = pc.Gauge(
+temperature_celsius = pc.Gauge(
     namespace=NAMESPACE,
-    name='temperature',
+    name='temperature_celsius',
     documentation='当前温度',
     labelnames=['location'],
 )
 
-humidity = pc.Gauge(
+humidity_percent = pc.Gauge(
     namespace=NAMESPACE,
-    name='humidity',
+    name='humidity_percent',
     documentation='当前湿度',
     labelnames=['location'],
 )
 
-feels_like = pc.Gauge(
+feels_like_celsius = pc.Gauge(
     namespace=NAMESPACE,
-    name='feels_like',
+    name='feels_like_celsius',
     documentation='体感温度',
     labelnames=['location'],
 )
 
-wind_360 = pc.Gauge(
+wind_360_degrees = pc.Gauge(
     namespace=NAMESPACE,
-    name='wind_360',
+    name='wind_360_degrees',
     documentation='风向（360度）',
     labelnames=['location'],
 )
 
-wind_scale = pc.Gauge(
+wind_scale_level = pc.Gauge(
     namespace=NAMESPACE,
-    name='wind_scale',
+    name='wind_scale_level',
     documentation='风力等级',
     labelnames=['location'],
 )
 
-wind_speed = pc.Gauge(
+wind_speed_meters_per_second = pc.Gauge(
     namespace=NAMESPACE,
-    name='wind_speed',
+    name='wind_speed_meters_per_second',
     documentation='风速',
     labelnames=['location'],
 )
 
-pressure = pc.Gauge(
+pressure_hpa = pc.Gauge(
     namespace=NAMESPACE,
-    name='pressure',
+    name='pressure_hpa',
     documentation='气压',
     labelnames=['location'],
 )
