@@ -30,7 +30,6 @@ obs_time_deplay_seconds = pc.Gauge(
     name='obs_time_deplay_seconds',
     documentation='观测延时',
     labelnames=['location'],
-    unit='seconds'
 )
 
 temperature = pc.Gauge(
@@ -38,7 +37,6 @@ temperature = pc.Gauge(
     name='temperature',
     documentation='当前温度',
     labelnames=['location'],
-    unit='degree_celsius'
 )
 
 humidity = pc.Gauge(
@@ -46,7 +44,6 @@ humidity = pc.Gauge(
     name='humidity',
     documentation='当前湿度',
     labelnames=['location'],
-    unit='percentage'
 )
 
 feels_like = pc.Gauge(
@@ -54,7 +51,6 @@ feels_like = pc.Gauge(
     name='feels_like',
     documentation='体感温度',
     labelnames=['location'],
-    unit='degree_celsius'
 )
 
 wind_360 = pc.Gauge(
@@ -62,7 +58,6 @@ wind_360 = pc.Gauge(
     name='wind_360',
     documentation='风向（360度）',
     labelnames=['location'],
-    unit='degree'
 )
 
 wind_scale = pc.Gauge(
@@ -70,7 +65,6 @@ wind_scale = pc.Gauge(
     name='wind_scale',
     documentation='风力等级',
     labelnames=['location'],
-    unit='scale'
 )
 
 wind_speed = pc.Gauge(
@@ -78,7 +72,6 @@ wind_speed = pc.Gauge(
     name='wind_speed',
     documentation='风速',
     labelnames=['location'],
-    unit='m/s'
 )
 
 pressure = pc.Gauge(
@@ -86,7 +79,6 @@ pressure = pc.Gauge(
     name='pressure',
     documentation='气压',
     labelnames=['location'],
-    unit='hPa'
 )
 
 
