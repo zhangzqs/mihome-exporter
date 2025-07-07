@@ -19,6 +19,7 @@ class QWeatherConfig(BaseModel):
     api_key: str
     api_host: str
     interval_seconds: int = 10
+    cache_ttl_seconds: int = 600
     locations: list[LocationConfig] = []
 
 
@@ -92,17 +93,24 @@ def init(_cfg: QWeatherConfig):
     print('QWeather 配置初始化完成')
 
 
-weather_cache = TTLCache(
-    maxsize=100,
-    ttl=timedelta(minutes=10).total_seconds(),
-)
+weather_cache: Optional[TTLCache] = None
+
+
+def get_weather_cache() -> TTLCache:
+    global weather_cache
+    if weather_cache is not None:
+        return weather_cache
+    if cfg is None:
+        raise ValueError('请先调用 init() 初始化配置')
+    weather_cache = TTLCache(
+        maxsize=100,
+        ttl=timedelta(seconds=cfg.cache_ttl_seconds).total_seconds(),
+    )
 
 
 def get_weather(lon: float, lat: float) -> Any:
-    """
-    10分钟缓存一次
-    """
     location = f"{format(lon, '.2f')},{format(lat, '.2f')}"
+    weather_cache = get_weather_cache()
     if location in weather_cache:
         return weather_cache[location]
     logging.info(f'缓存过期，获取 {location} 的天气数据')
@@ -118,7 +126,9 @@ def get_weather(lon: float, lat: float) -> Any:
     if resp.status_code != 200:
         raise httpx.HTTPStatusError(
             f'请求失败: {resp.status_code} - {resp.text}', request=resp.request, response=resp)
-    return resp.json()
+    ret = resp.json()
+    weather_cache[location] = ret
+    return ret
 
 
 def collect_qweather(location_cfg: LocationConfig):
