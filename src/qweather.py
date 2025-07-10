@@ -106,6 +106,7 @@ def get_weather_cache() -> TTLCache:
         maxsize=100,
         ttl=timedelta(seconds=cfg.cache_ttl_seconds).total_seconds(),
     )
+    return weather_cache
 
 
 def get_weather(lon: float, lat: float) -> Any:

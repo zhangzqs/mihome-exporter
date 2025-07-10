@@ -394,10 +394,23 @@ def collector_by_name(device_name: str):
     matcherd_collector(device_name)
 
 
+def get_need_collect_names() -> list[str]:
+    if cfg.devices is None or len(cfg.devices) == 0:
+        return list(map(lambda x: x['name'], filter(lambda x: x['model'] in collectors.keys(), devices)))
+    ret = []
+    for device_name in cfg.devices:
+        # 判断device_name是否在devices中
+        if any(map(lambda x: x['name'] == device_name.name, devices)):
+            ret.append(device_name.name)
+        else:
+            logging.warning(f'配置中的设备 {device_name.name} 在设备列表中未找到')
+    return ret
+
+
 def collect_once():
     try:
-        for device in cfg.devices:
-            collector_by_name(device.name)
+        for device_name in get_need_collect_names():
+            collector_by_name(device_name)
     except Exception as e:
         logging.error(f'采集数据时发生错误: {e}')
         logging.exception(e)

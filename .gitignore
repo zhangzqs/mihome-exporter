@@ -209,3 +209,5 @@ __marimo__/
 auth.json
 devices.json
 config.yaml
+
+*.log.*

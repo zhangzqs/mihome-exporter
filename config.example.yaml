@@ -6,13 +6,17 @@ logger:
   file_encoding: "utf-8"
 
 port: 8000
-auth_file: "auth.json"
-devices_file: "devices.json"
-interval_seconds: 5
 
-devices:
-  - name: "电脑桌插座"
-  - name: "热水器插座"
-  - name: "台灯插座"
-  - name: "温湿度计"
-  - name: "路由器"
+mihome_config:
+  auth_file: "auth.json"
+  devices_file: "devices.json"
+  interval_seconds: 5
+
+qweather_config:
+  api_key: "<api_key>"
+  api_host: "<api_host>"
+  interval_seconds: 5
+  locations:
+    - name: "家"
+      lon: 121.63
+      lat: 31.19
