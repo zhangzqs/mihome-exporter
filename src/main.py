@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import logging
 import mihome
 import qweather
+import mirouter
 
 
 class Config(BaseModel):
@@ -14,6 +15,7 @@ class Config(BaseModel):
     port: int = 8000
     mihome_config: Optional[mihome.MiHomeConfig] = None
     qweather_config: Optional[qweather.QWeatherConfig] = None
+    mirouter_config: Optional[mirouter.MiRouterConfig] = None
 
 
 def main():
@@ -29,12 +31,21 @@ def main():
     else:
         logging.warning(
             "MiHome configuration is not provided, skipping MiHome collector initialization.")
+
     if cfg.qweather_config:
         qweather.init(cfg.qweather_config)
         threads.append(qweather.start_collect())
     else:
         logging.warning(
             "QWeather configuration is not provided, skipping QWeather collector initialization.")
+
+    if cfg.mirouter_config:
+        mirouter.init(cfg.mirouter_config)
+        threads.append(mirouter.start_collect())
+    else:
+        logging.warning(
+            "MiRouter configuration is not provided, skipping MiRouter collector initialization.")
+
     if not threads:
         logging.warning(
             "No collectors initialized, exiting. Please provide valid configurations.")

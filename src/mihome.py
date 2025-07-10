@@ -136,7 +136,7 @@ def register_collector(**metadata):
     return decorator
 
 
-NAMESPACE = 'mihome_exporter'
+NAMESPACE = 'mihome'
 prop_delay_seconds = Gauge(
     namespace=NAMESPACE,
     name='prop_delay_seconds',
