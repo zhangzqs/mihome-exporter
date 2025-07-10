@@ -387,13 +387,16 @@ def get_status() -> StatusResponse:
 
 
 def collect_once():
-    try:
-        status = get_status()
-        logging.info("成功获取路由器状态: %s", status)
-        collect_status(status)
-    except Exception as e:
-        logging.error(f"获取状态时发生错误: {e}")
-        logging.exception(e)
+    while True:
+        try:
+            status = get_status()
+            logging.info("成功获取路由器状态: %s", status)
+            collect_status(status)
+            return
+        except Exception as e:
+            logging.error(f"获取状态时发生错误: {e}")
+            logging.exception(e)
+            login.cache_clear() # 清空缓存后重试
 
 
 def start_collect() -> Thread:
