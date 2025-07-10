@@ -1,6 +1,6 @@
 import logging
 from threading import Thread
-from typing import Optional, Type, TypeVar
+from typing import Optional, Type, TypeVar, Union
 import httpx
 from pydantic import BaseModel
 import time
@@ -66,6 +66,7 @@ T = TypeVar("T", bound=BaseModel)
 def must_get_body(resp: httpx.Response, t: Type[T]) -> T:
     resp.raise_for_status()
     resp_body = resp.json()
+    logging.info(f"response body: {resp_body}")
     if resp_body.get('code') != 0:
         raise RuntimeError(f"请求失败：{resp_body}")
     return t(**resp_body)
@@ -161,19 +162,19 @@ class DeviceStatus(BaseModel):
     "设备名称"
     mac: str
     "mac地址"
-    upspeed: str
+    upspeed: Union[str, int]
     "实时上传速度"
-    downspeed: str
+    downspeed: Union[str, int]
     "实时下载速度"
-    upload: str
+    upload: Union[str, int]
     "当前已上传量"
-    download: str
+    download: Union[str, int]
     "当前已下载量"
-    online: str
+    online: Union[str, int]
     "在线了多久，单位是秒"
-    maxdownloadspeed: str
+    maxdownloadspeed: Union[str, int]
     "最大下载速度"
-    maxuploadspeed: str
+    maxuploadspeed: Union[str, int]
     "最大上传速度"
 
 
@@ -268,17 +269,17 @@ def collect_cpu_status(s: CpuStatus):
 class WanStatus(BaseModel):
     devname: str
     "设备名称"
-    upspeed: str
+    upspeed: Union[str, int]
     "实时上传速度"
-    downspeed: str
+    downspeed: Union[str, int]
     "实时下载速度"
-    upload: str
+    upload: Union[str, int]
     "当前已上传量"
-    download: str
+    download: Union[str, int]
     "当前已下载量"
-    maxdownloadspeed: str
+    maxdownloadspeed: Union[str, int]
     "最大下载速度"
-    maxuploadspeed: str
+    maxuploadspeed: Union[str, int]
     "最大上传速度"
 
 
@@ -396,7 +397,8 @@ def collect_once():
         except Exception as e:
             logging.error(f"获取状态时发生错误: {e}")
             logging.exception(e)
-            login.cache_clear() # 清空缓存后重试
+            login.cache_clear()  # 清空缓存后重试
+            logging.warn("正在重试获取路由器状态...")
 
 
 def start_collect() -> Thread:
