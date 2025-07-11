@@ -35,6 +35,8 @@ class MiRouterConfig(BaseModel):
     "路由器密码"
     interval_seconds: int = 10
     "采集间隔，单位是秒"
+    device_name_alias_by_mac: dict[str, str] = {}
+    "设备名称别名，key是mac地址，value是设备名称"
 
 
 cfg: Optional[MiRouterConfig] = None
@@ -179,6 +181,9 @@ class DeviceStatus(BaseModel):
 
 
 def collect_device_status(s: DeviceStatus):
+    if s.mac in cfg.device_name_alias_by_mac:
+        s.devname = cfg.device_name_alias_by_mac[s.mac]
+
     device_up_bytes.labels(
         device_name=s.devname,
         mac=s.mac,

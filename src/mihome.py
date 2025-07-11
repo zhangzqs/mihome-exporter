@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 import os
 from typing import Callable, Optional, Any
@@ -11,7 +12,8 @@ from prometheus_client import Gauge
 
 
 class DeviceConfig(BaseModel):
-    name: str
+    device_id: Optional[str]
+    device_name: Optional[str]
 
 
 class MiHomeConfig(BaseModel):
@@ -19,6 +21,8 @@ class MiHomeConfig(BaseModel):
     devices_file: str = 'devices.json'
     devices: list[DeviceConfig] = []
     interval_seconds: float = 10.0
+    device_name_alias: dict[str, str] = {}
+    "根据device_id给设备起一个别名，用于在Prometheus中显示更友好的名称"
 
 
 cfg: Optional[MiHomeConfig] = None
@@ -67,23 +71,22 @@ def login_and_get_api():
     return api
 
 
-def get_device_by_name(name: str):
+def get_device_by_did(did: str):
     for device in devices:
-        if device['name'] == name:
+        if device['did'] == did:
             return device
-    raise ValueError(f'未找到名称为 {name} 的设备')
+    raise ValueError(f'未找到did={did} 的设备')
 
 
 def get_device_props(
-    name: str,
+    did: str,
     assert_model: str | None = None,
     sp_id_pairs: dict[str, (int, int)] = {},
 ) -> dict[str, dict[str, Any]]:
-    device: dict = get_device_by_name(name)
+    device: dict = get_device_by_did(did)
     if assert_model:
         # 支持通配符匹配
         if '*' in assert_model:
-            import fnmatch
             assert fnmatch.fnmatch(device['model'], assert_model), \
                 f'设备 {device["name"]} 的型号 {device["model"]} 不符合通配模式 {assert_model}'
         else:
@@ -141,35 +144,35 @@ prop_delay_seconds = Gauge(
     namespace=NAMESPACE,
     name='prop_delay_seconds',
     documentation='属性更新延时',
-    labelnames=['device_name', 'property_name'],
+    labelnames=['device_name', 'property_name', 'device_id'],
 )
 
 plug_power_on_status = Gauge(
     namespace=NAMESPACE,
     name='plug_power_on_status',
     documentation='插座电源状态',
-    labelnames=['device_ip', 'device_name'],
+    labelnames=['device_ip', 'device_name', 'device_id'],
 )
 
 plug_temperature = Gauge(
     namespace=NAMESPACE,
     name='plug_temperature',
     documentation='设备温度',
-    labelnames=['device_ip', 'device_name'],
+    labelnames=['device_ip', 'device_name', 'device_id'],
 )
 
 plug_electric_power = Gauge(
     namespace=NAMESPACE,
     name='plug_electric_power',
     documentation='功率',
-    labelnames=['device_ip', 'device_name'],
+    labelnames=['device_ip', 'device_name', 'device_id'],
 )
 
 
 @register_collector(model='cuco.plug.v3')
-def collect_cuco_plug_v3_metrics(device_name: str):
+def collect_cuco_plug_v3_metrics(device_id: str):
     props = get_device_props(
-        name=device_name,
+        did=device_id,
         assert_model=collect_cuco_plug_v3_metrics.model,
         sp_id_pairs={
             'power_on_status': (2, 1),  # 电源状态
@@ -177,59 +180,71 @@ def collect_cuco_plug_v3_metrics(device_name: str):
             'temperature': (12, 2),  # 设备温度
         }
     )
-    logging.info(f'采集 {device_name} 的数据: {props}')
+    device = get_device_by_did(device_id)
+    logging.info(f'采集 {device["name"]} 的数据: {props}')
     device_ip = props.get('device_ip', 'unknown')
     plug_power_on_status.labels(
         device_ip=device_ip,
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['power_on_status']['value'],
     )
     plug_electric_power.labels(
         device_ip=device_ip,
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['electric_power']['value'],
     )
     plug_temperature.labels(
         device_ip=device_ip,
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['temperature']['value'],
     )
     for property_name in ['power_on_status', 'electric_power', 'temperature']:
-        prop_delay_seconds.labels(device_name, property_name).set(
+        prop_delay_seconds.labels(
+            device_name=device['name'],
+            device_id=device_id,
+            property_name=property_name,
+        ).set(
             value=props[property_name]['delay_seconds'],
         )
 
 
 @register_collector(model='chuangmi.plug.m3')
-def collect_chuangmi_plug_m3_metrics(device_name: str):
+def collect_chuangmi_plug_m3_metrics(device_id: str):
     props = get_device_props(
-        name=device_name,
+        did=device_id,
         assert_model=collect_chuangmi_plug_m3_metrics.model,
         sp_id_pairs={
             'power_on_status': (2, 1),  # 电源状态
             'temperature': (2, 2),  # 设备温度
         }
     )
-    logging.info(f'采集 {device_name} 的数据: {props}')
+    device = get_device_by_did(device_id)
+    logging.info(f'采集 {device["name"]} 的数据: {props}')
     device_ip = props.get('device_ip', 'unknown')
     plug_power_on_status.labels(
         device_ip=device_ip,
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['power_on_status']['value'],
     )
     plug_temperature.labels(
         device_ip=device_ip,
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['temperature']['value'],
     )
     for property_name in ['power_on_status', 'temperature']:
         prop_delay_seconds.labels(
-            device_name=device_name,
+            device_name=device['name'],
+            device_id=device_id,
             property_name=property_name,
         ).set(
             value=props[property_name]['delay_seconds'],
@@ -240,28 +255,28 @@ sensor_ht_temperature = Gauge(
     namespace=NAMESPACE,
     name='sensor_ht_temperature',
     documentation='温度',
-    labelnames=['device_name'],
+    labelnames=['device_name', 'device_id'],
 )
 
 sensor_ht_relative_humidity = Gauge(
     namespace=NAMESPACE,
     name='sensor_ht_relative_humidity',
     documentation='相对湿度',
-    labelnames=['device_name'],
+    labelnames=['device_name', 'device_id'],
 )
 
 sensor_ht_battery_level = Gauge(
     namespace=NAMESPACE,
     name='sensor_ht_battery_level',
     documentation='电池电量',
-    labelnames=['device_name'],
+    labelnames=['device_name', 'device_id'],
 )
 
 
 @register_collector(model='miaomiaoce.sensor_ht.t2')
-def collect_miaomiaoce_sensor_ht_t2(device_name: str):
+def collect_miaomiaoce_sensor_ht_t2(device_id: str):
     props = get_device_props(
-        name=device_name,
+        did=device_id,
         assert_model=collect_miaomiaoce_sensor_ht_t2.model,
         sp_id_pairs={
             'temperature': (2, 1),  # 温度
@@ -269,25 +284,30 @@ def collect_miaomiaoce_sensor_ht_t2(device_name: str):
             'battery_level': (3, 1),  # 电池电量
         }
     )
-    logging.info(f'采集 {device_name} 的数据: {props}')
+    device = get_device_by_did(device_id)
+    logging.info(f'采集 {device["name"]} 的数据: {props}')
     sensor_ht_temperature.labels(
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['temperature']['value'],
     )
     sensor_ht_relative_humidity.labels(
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['relative_humidity']['value'],
     )
     sensor_ht_battery_level.labels(
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['battery_level']['value'],
     )
     for property_name in ['temperature', 'relative_humidity', 'battery_level']:
         prop_delay_seconds.labels(
-            device_name=device_name,
+            device_name=device['name'],
+            device_id=device_id,
             property_name=property_name,
         ).set(
             value=props[property_name]['delay_seconds'],
@@ -298,41 +318,45 @@ router_download_speed = Gauge(
     namespace=NAMESPACE,
     name='router_download_speed',
     documentation='路由器下载速度',
-    labelnames=['device_name'],
+    labelnames=['device_name', 'device_id'],
 )
 
 router_connected_device_number = Gauge(
     namespace=NAMESPACE,
     name='router_connected_device_number',
     documentation='路由器连接的设备数量',
-    labelnames=['device_name'],
+    labelnames=['device_name', 'device_id'],
 )
 
 
 @register_collector(model='xiaomi.router.*')
-def collect_router_metrics(device_name: str):
+def collect_router_metrics(device_id: str):
     props = get_device_props(
-        name=device_name,
+        did=device_id,
         assert_model=collect_router_metrics.model,
         sp_id_pairs={
             'download_speed': (2, 1),  # 下载速度
             'connected_device_number': (2, 2),  # 连接的设备数量
         }
     )
-    logging.info(f'采集 {device_name} 的数据: {props}')
+    device = get_device_by_did(device_id)
+    logging.info(f'采集 {device["name"]} 的数据: {props}')
     router_download_speed.labels(
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['download_speed']['value'],
     )
     router_connected_device_number.labels(
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['connected_device_number']['value'],
     )
     for property_name in ['download_speed', 'connected_device_number']:
         prop_delay_seconds.labels(
-            device_name=device_name,
+            device_name=device['name'],
+            device_id=device_id,
             property_name=property_name,
         ).set(
             value=props[property_name]['delay_seconds'],
@@ -343,74 +367,85 @@ cooker_status = Gauge(
     namespace=NAMESPACE,
     name='cooker_status',
     documentation='电饭煲烹饪状态',
-    labelnames=['device_name'],
+    labelnames=['device_name', 'device_id'],
 )
 
 
 @register_collector(model='chunmi.cooker.normal2')
-def collect_cooker_metrics(device_name: str):
+def collect_cooker_metrics(device_id: str):
     props = get_device_props(
-        name=device_name,
+        did=device_id,
         assert_model=collect_cooker_metrics.model,
         sp_id_pairs={
             'cooker_status': (2, 1),  # 烹饪状态
         }
     )
-    logging.info(f'采集 {device_name} 的数据: {props}')
+    device = get_device_by_did(device_id)
+    logging.info(f'采集 {device["name"]} 的数据: {props}')
     cooker_status.labels(
-        device_name=device_name,
+        device_name=device['name'],
+        device_id=device_id,
     ).set(
         value=props['cooker_status']['value'],
     )
     for property_name in ['cooker_status']:
         prop_delay_seconds.labels(
-            device_name=device_name,
+            device_name=device['name'],
+            device_id=device_id,
             property_name=property_name,
         ).set(
             value=props[property_name]['delay_seconds'],
         )
 
 
-def collector_by_name(device_name: str):
-    device = get_device_by_name(device_name)
+def collector_by_id(device_id: str):
+    device = get_device_by_did(device_id)
     matcherd_collector: Optional[Callable[[str], None]] = None
     for (model_matcher, collector) in collectors.items():
         if '*' in model_matcher:
-            import fnmatch
             if fnmatch.fnmatch(device['model'], model_matcher):
                 if matcherd_collector is None:
                     matcherd_collector = collector
                 else:
                     logging.warning(
-                        f'设备 {device_name} 匹配到多个收集器: {matcherd_collector.__name__} 和 {collector.__name__}')
+                        f'设备 {device_id} 匹配到多个收集器: {matcherd_collector.__name__} 和 {collector.__name__}')
         else:
             if device['model'] == model_matcher:
                 matcherd_collector = collector
     if matcherd_collector is None:
         logging.warning(
-            f'未找到设备 {device_name} 的收集器，请检查设备型号和注册的收集器')
+            f'未找到设备 {device_id} 的收集器，请检查设备型号和注册的收集器')
         return
-    logging.info(f'使用收集器 {matcherd_collector.__name__} 采集设备 {device_name} 的数据')
-    matcherd_collector(device_name)
+    logging.info(f'使用收集器 {matcherd_collector.__name__} 采集设备 {device_id} 的数据')
+    matcherd_collector(device_id)
 
 
-def get_need_collect_names() -> list[str]:
-    if cfg.devices is None or len(cfg.devices) == 0:
-        return list(map(lambda x: x['name'], filter(lambda x: x['model'] in collectors.keys(), devices)))
-    ret = []
-    for device_name in cfg.devices:
-        # 判断device_name是否在devices中
-        if any(map(lambda x: x['name'] == device_name.name, devices)):
-            ret.append(device_name.name)
+def model_in_collector(model: str) -> bool:
+    for (model_matcher, _) in collectors.items():
+        if '*' in model_matcher:
+            if fnmatch.fnmatch(model, model_matcher):
+                return True
         else:
-            logging.warning(f'配置中的设备 {device_name.name} 在设备列表中未找到')
+            if model == model_matcher:
+                return True
+    return False
+
+
+def get_need_collect_device_id_list() -> list[str]:
+    if cfg.devices is None or len(cfg.devices) == 0:
+        return list(map(lambda x: x['did'], filter(lambda x: model_in_collector(x['model']), devices)))
+    ret = []
+    for device_cfg in cfg.devices:
+        # 判断device_name是否在devices中
+        if device_cfg.device_id is not None and any(map(lambda x: x['did'] == device_cfg.device_id, devices)):
+            ret.append(device_cfg.device_id)
     return ret
 
 
 def collect_once():
     try:
-        for device_name in get_need_collect_names():
-            collector_by_name(device_name)
+        for device_id in get_need_collect_device_id_list():
+            collector_by_id(device_id)
     except Exception as e:
         logging.error(f'采集数据时发生错误: {e}')
         logging.exception(e)
@@ -419,6 +454,14 @@ def collect_once():
 def start_collect() -> Thread:
     if cfg is None:
         raise ValueError('请先调用 init() 初始化配置')
+    for (did, alias_name) in cfg.device_name_alias.items():
+        for device in devices:
+            if device['did'] == did:
+                device['name'] = alias_name
+                break
+        else:
+            logging.warning(f'未找到设备 {did}，无法设置设备别名 {alias_name}')
+            continue
 
     def run():
         while True:
