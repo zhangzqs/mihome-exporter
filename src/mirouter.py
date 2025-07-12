@@ -113,49 +113,49 @@ device_up_bytes = Gauge(
     namespace=NAMESPACE,
     name='device_up_bytes',
     documentation='设备上传字节数',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 device_down_bytes = Gauge(
     namespace=NAMESPACE,
     name='device_down_bytes',
     documentation='设备下载字节数',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 device_up_speed_bytes_per_second = Gauge(
     namespace=NAMESPACE,
     name='device_up_speed_bytes_per_second',
     documentation='设备上传速度（字节/秒）',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 device_down_speed_bytes_per_second = Gauge(
     namespace=NAMESPACE,
     name='device_down_speed_bytes_per_second',
     documentation='设备下载速度（字节/秒）',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 device_online_seconds = Gauge(
     namespace=NAMESPACE,
     name='device_online_seconds',
     documentation='设备在线时长（秒）',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 device_max_up_speed_bytes_per_second = Gauge(
     namespace=NAMESPACE,
     name='device_max_up_speed_bytes_per_second',
     documentation='设备最大上传速度（字节/秒）',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 device_max_down_speed_bytes_per_second = Gauge(
     namespace=NAMESPACE,
     name='device_max_down_speed_bytes_per_second',
     documentation='设备最大下载速度（字节/秒）',
-    labelnames=['device_name', 'mac'],
+    labelnames=['device_name', 'mac', 'known'],
 )
 
 
@@ -181,36 +181,54 @@ class DeviceStatus(BaseModel):
 
 
 def collect_device_status(s: DeviceStatus):
-    if s.mac in cfg.device_name_alias_by_mac:
-        s.devname = cfg.device_name_alias_by_mac[s.mac]
+    for mac, devname in cfg.device_name_alias_by_mac.items():
+        if s.mac.lower() == mac.lower():
+            s.devname = devname
+            known = "true"
+            logging.info(
+                f"设备 {s.mac} 的别名已设置为 {s.devname}，并标记为已知设备"
+            )
+            break
+    else:
+        known = "false"
+        logging.warning(
+            f"未找到设备 {s.mac} 的别名，作为未知设备，将使用默认名称 {s.devname}。建议在配置中添加别名。"
+        )
 
     device_up_bytes.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.upload))
     device_down_bytes.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.download))
     device_up_speed_bytes_per_second.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.upspeed))
     device_down_speed_bytes_per_second.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.downspeed))
     device_online_seconds.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.online))
     device_max_up_speed_bytes_per_second.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.maxuploadspeed))
     device_max_down_speed_bytes_per_second.labels(
         device_name=s.devname,
         mac=s.mac,
+        known=known,
     ).set(int(s.maxdownloadspeed))
 
 
@@ -396,7 +414,8 @@ def collect_once():
     while True:
         try:
             status = get_status()
-            logging.info("成功获取路由器状态: %s", status)
+            logging.debug("成功获取路由器状态: %s", status.model_dump_json())
+            logging.info("收集到设备数量: %d", len(status.dev))
             collect_status(status)
             return
         except Exception as e:
