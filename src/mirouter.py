@@ -1,6 +1,6 @@
 import logging
 from threading import Thread
-from typing import Optional, Type, TypeVar, Union
+from typing import List, Optional, Type, TypeVar, Union
 import httpx
 from pydantic import BaseModel
 import time
@@ -109,53 +109,55 @@ def login() -> LoginResponse:
 
 NAMESPACE = "mirouter"
 
-device_up_bytes = Gauge(
+device_status_labels = ['device_name', 'mac', 'known']
+
+device_status_up_bytes = Gauge(
     namespace=NAMESPACE,
-    name='device_up_bytes',
+    name='device_status_up_bytes',
     documentation='设备上传字节数',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
-device_down_bytes = Gauge(
+device_status_down_bytes = Gauge(
     namespace=NAMESPACE,
-    name='device_down_bytes',
+    name='device_status_down_bytes',
     documentation='设备下载字节数',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
-device_up_speed_bytes_per_second = Gauge(
+device_status_up_bytes_per_second = Gauge(
     namespace=NAMESPACE,
-    name='device_up_speed_bytes_per_second',
+    name='device_status_up_bytes_per_second',
     documentation='设备上传速度（字节/秒）',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
-device_down_speed_bytes_per_second = Gauge(
+device_status_down_bytes_per_second = Gauge(
     namespace=NAMESPACE,
-    name='device_down_speed_bytes_per_second',
+    name='device_status_down_bytes_per_second',
     documentation='设备下载速度（字节/秒）',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
-device_online_seconds = Gauge(
+device_status_online_seconds = Gauge(
     namespace=NAMESPACE,
-    name='device_online_seconds',
+    name='device_status_online_seconds',
     documentation='设备在线时长（秒）',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
-device_max_up_speed_bytes_per_second = Gauge(
+device_status_max_up_bytes_per_second = Gauge(
     namespace=NAMESPACE,
-    name='device_max_up_speed_bytes_per_second',
+    name='device_status_max_up_bytes_per_second',
     documentation='设备最大上传速度（字节/秒）',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
-device_max_down_speed_bytes_per_second = Gauge(
+device_status_max_down_bytes_per_second = Gauge(
     namespace=NAMESPACE,
-    name='device_max_down_speed_bytes_per_second',
+    name='device_status_max_down_bytes_per_second',
     documentation='设备最大下载速度（字节/秒）',
-    labelnames=['device_name', 'mac', 'known'],
+    labelnames=device_status_labels,
 )
 
 
@@ -190,45 +192,40 @@ def collect_device_status(s: DeviceStatus):
             )
             break
     else:
-        known = "false"
-        logging.warning(
-            f"未找到设备 {s.mac} 的别名，作为未知设备，将使用默认名称 {s.devname}。建议在配置中添加别名。"
-        )
+        if s.mac == "":  # 这是其他剩余设备的状态
+            s.devname = "其他设备"
+            known = "true"
+        else:
+            known = "false"
+            logging.warning(
+                f"未找到设备 {s.mac} 的别名，作为未知设备，将使用默认名称 {s.devname}。建议在配置中添加别名。"
+            )
 
-    device_up_bytes.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    labels = {
+        'device_name': s.devname,
+        'mac': s.mac,
+        'known': known,
+    }
+    device_status_up_bytes.labels(
+        **labels
     ).set(int(s.upload))
-    device_down_bytes.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    device_status_down_bytes.labels(
+        **labels
     ).set(int(s.download))
-    device_up_speed_bytes_per_second.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    device_status_up_bytes_per_second.labels(
+        **labels
     ).set(int(s.upspeed))
-    device_down_speed_bytes_per_second.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    device_status_down_bytes_per_second.labels(
+        **labels
     ).set(int(s.downspeed))
-    device_online_seconds.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    device_status_online_seconds.labels(
+        **labels
     ).set(int(s.online))
-    device_max_up_speed_bytes_per_second.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    device_status_max_up_bytes_per_second.labels(
+        **labels
     ).set(int(s.maxuploadspeed))
-    device_max_down_speed_bytes_per_second.labels(
-        device_name=s.devname,
-        mac=s.mac,
-        known=known,
+    device_status_max_down_bytes_per_second.labels(
+        **labels
     ).set(int(s.maxdownloadspeed))
 
 
@@ -410,13 +407,141 @@ def get_status() -> StatusResponse:
     return must_get_body(resp, StatusResponse)
 
 
+class Authority(BaseModel):
+    wan: int
+    pridisk: int
+    admin: int
+    lan: int
+
+
+class IPDetail(BaseModel):
+    downspeed: str
+    online: str
+    active: int
+    upspeed: str
+    ip: str
+
+
+class Statistics(BaseModel):
+    downspeed: str
+    online: str
+    upspeed: str
+
+
+class Device(BaseModel):
+    mac: str
+    oname: str
+    isap: int
+    parent: str
+    authority: Authority
+    push: int
+    online: int
+    name: str
+    times: int
+    ip: List[IPDetail]
+    statistics: Statistics
+    icon: str
+    type: int
+
+
+class DeviceListResponse(BaseModel):
+    mac: str
+    list: List[Device]
+    code: int
+
+
+def get_device_list() -> DeviceListResponse:
+    token = login().token
+    resp = httpx.get(
+        url=f"{cfg.base_addr}/cgi-bin/luci/;stok={token}/api/misystem/devicelist",
+    )
+    print(f"获取设备列表响应: {resp.text}")
+    return must_get_body(resp, DeviceListResponse)
+
+
+device_list_labels = ['device_name', 'mac', 'known', 'device_ip']
+
+device_list_up_bytes_per_second = Gauge(
+    namespace=NAMESPACE,
+    name='device_list_up_bytes_per_second',
+    documentation='设备上传速度（字节/秒）',
+    labelnames=device_list_labels,
+)
+
+device_list_down_bytes_per_second = Gauge(
+    namespace=NAMESPACE,
+    name='device_list_down_bytes_per_second',
+    documentation='设备下载速度（字节/秒）',
+    labelnames=device_list_labels,
+)
+
+device_list_online_seconds = Gauge(
+    namespace=NAMESPACE,
+    name='device_list_online_seconds',
+    documentation='设备在线时长（秒）',
+    labelnames=device_list_labels,
+)
+
+device_list_unknown_count = Gauge(
+    namespace=NAMESPACE,
+    name='device_list_unknown_count',
+    documentation='未知设备数量',
+    labelnames=['device_name', 'mac'],
+)
+
+
+def collect_device_list(devicelist: DeviceListResponse):
+    for device in devicelist.list:
+        for mac, devname in cfg.device_name_alias_by_mac.items():
+            if device.mac.lower() == mac.lower():
+                device.name = devname
+                known = "true"
+                logging.info(
+                    f"设备 {device.mac} 的别名已设置为 {device.name}，并标记为已知设备"
+                )
+                break
+        else:
+            known = "false"
+            device_list_unknown_count.labels(
+                device_name=device.name,
+                mac=device.mac,
+            ).set(1)
+            logging.warning(
+                f"未找到设备 {device.mac} 的别名，作为未知设备，将使用默认名称 {device.name}。建议在配置中添加别名。"
+            )
+        for ip_detail in device.ip:
+            labels = {
+                'device_name': device.name,
+                'mac': device.mac,
+                'known': known,
+                'device_ip': ip_detail.ip,
+            }
+            device_list_up_bytes_per_second.labels(
+                **labels
+            ).set(int(ip_detail.upspeed))
+            device_list_down_bytes_per_second.labels(
+                **labels
+            ).set(int(ip_detail.downspeed))
+            device_list_online_seconds.labels(
+                **labels
+            ).set(int(ip_detail.online))
+
+
 def collect_once():
     while True:
         try:
+            # 收集路由器状态
             status = get_status()
             logging.debug("成功获取路由器状态: %s", status.model_dump_json())
-            logging.info("收集到设备数量: %d", len(status.dev))
+            logging.info("当前在线设备数量: %d", status.count.online)
             collect_status(status)
+            logging.info("路由器状态已收集")
+
+            # 收集设备列表
+            devicelist = get_device_list()
+            logging.debug("成功获取设备列表: %s", devicelist.model_dump_json())
+            collect_device_list(devicelist)
+            logging.info("设备列表已收集")
             return
         except Exception as e:
             logging.error(f"获取状态时发生错误: {e}")
