@@ -18,6 +18,7 @@ WORKDIR /app
 
 # Copy dependency files first for better caching
 COPY pyproject.toml uv.lock ./
+COPY README.md ./
 
 # Install dependencies - this layer will be cached if dependencies don't change
 RUN uv sync --locked --no-dev
@@ -25,6 +26,5 @@ RUN uv sync --locked --no-dev
 # Copy source code after dependencies are installed
 COPY src/ ./src/
 COPY config.example.yaml ./
-COPY README.md ./
 
 CMD ["uv", "run", "src/main.py", "--config", "config.yaml"]
