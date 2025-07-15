@@ -398,6 +398,42 @@ def collect_cooker_metrics(device_id: str):
         )
 
 
+@register_collector(model='lumi.acpartner.mcn02')
+def collect_lumi_acpartner_mcn02_metrics(device_id: str):
+    "米家空调伴侣2设备数据采集"
+    props = get_device_props(
+        did=device_id,
+        assert_model=collect_lumi_acpartner_mcn02_metrics.model,
+        sp_id_pairs={
+            'power_on_status': (2, 1),
+            'electric_power': (5, 1),
+        }
+    )
+    device = get_device_by_did(device_id)
+    logging.info(f'采集 {device["name"]} 的数据: {props}')
+    device_ip = device.get('localip', 'unknown')
+    labels = {
+        'device_ip': device_ip,
+        'device_name': device['name'],
+        'device_id': device_id,
+    }
+    plug_power_on_status.labels(**labels).set(
+        value=props['power_on_status']['value'],
+    )
+    plug_electric_power.labels(**labels).set(
+        value=props['electric_power']['value'],
+    )
+
+    for property_name in ['power_on_status', 'electric_power']:
+        prop_delay_seconds.labels(
+            device_name=device['name'],
+            device_id=device_id,
+            property_name=property_name,
+        ).set(
+            value=props[property_name]['delay_seconds'],
+        )
+
+
 def collector_by_id(device_id: str):
     device = get_device_by_did(device_id)
     matcherd_collector: Optional[Callable[[str], None]] = None
